@@ -1,7 +1,9 @@
 require('dotenv').config();
+const Event = require('./models/Event');
 const express = require('express');
 const mongoose = require('mongoose');
 const app = express();
+app.use(express.json());
 
 app.get('/', (req, res) => {
     res.send('EventEase server is running');
@@ -10,6 +12,15 @@ app.get('/', (req, res) => {
 
 app.get('/hello',(req, res) => {
     res.json({message: 'hi'});
+});
+
+app.post('/api/events', async (req,res) => {
+    try{
+        const event = await Event.create(req.body);
+        res.status(201).json(event);
+    } catch(err) {
+        res.status(400).json({error: err.message});
+    }
 });
 
 
