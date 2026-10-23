@@ -1,4 +1,5 @@
 require('dotenv').config();
+const Registration = require('./models/Registration');
 const Event = require('./models/Event');
 const express = require('express');
 const mongoose = require('mongoose');
@@ -43,6 +44,38 @@ app.get('/api/events', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch events' });
   }
+});
+
+app.post('/api/events/:id/register', async (req,res) =>{
+    const { name, email} = req.body;
+    if(!name || !email) {
+        return res.status(400).json({error: 'Name and email are required'});
+    }
+    try{
+        const event = await Event.findById(req.params.id);
+        if(!event){
+            return res.status(404).json({error: 'Event not found'});
+        }
+        const registration = await Registration.create({event: event._id, name, email});
+
+        const updated = await Event.findOneAndUpdate(
+            {_id: event._id, $expr: { $lt: ['$seatsTaken', '$capacity']}},
+            { $inc: { seatsTaken: 1}}
+            
+        );
+
+        if (!updated){
+            await Registration.deleteOne({_id: registration._id});
+            return res.status(409).json({ error: 'Sorry, this event is full'});
+
+        }
+        res.status(201).json(registration);
+    } catch (err){
+        if (err.code ==11000){
+            return res.status(409).json({error: 'you are already registered for this event'});
+        }
+        res.status(400).json({error: err.message});
+    }
 });
 
 
