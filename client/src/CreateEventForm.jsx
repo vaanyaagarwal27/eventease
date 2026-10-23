@@ -3,7 +3,7 @@ import { API } from './api';
 
 const emptyForm = { title: '', venue: '', date: '', capacity: '', description: '' };
 
-function CreateEventForm({ onCreated }) {
+function CreateEventForm({ onCreated, adminKey }) {
     const [form, setForm] = useState(emptyForm);
     const [message, setMessage] = useState('');
 
@@ -15,7 +15,7 @@ function CreateEventForm({ onCreated }) {
         e.preventDefault();
         const res = await fetch(`${API}/events`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
             body: JSON.stringify({
                 ...form,
                 capacity: Number(form.capacity),

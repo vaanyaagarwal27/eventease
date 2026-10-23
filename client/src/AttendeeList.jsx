@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { API } from './api';
 
-function AttendeeList({ eventId, seatsTaken }) {
+function AttendeeList({ eventId, seatsTaken, adminKey }) {
   const [attendees, setAttendees] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/events/${eventId}/attendees`)
+    fetch(`${API}/events/${eventId}/attendees`, {
+      headers: { 'x-admin-key': adminKey },
+    })
       .then((res) => res.json())
-      .then((data) => setAttendees(data));
-  }, [eventId, seatsTaken]);
+      .then((data) => setAttendees(Array.isArray(data) ? data : []));
+  }, [eventId, seatsTaken, adminKey]);
 
   return (
     <div>
