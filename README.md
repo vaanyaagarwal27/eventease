@@ -18,23 +18,26 @@ Built for the **Codeio Junior Coordinator – Technical recruitment task (Track 
 
 > The backend runs on Render's free tier, which sleeps after ~15 minutes of inactivity. The first request after that can take up to a minute while it wakes up. After that, it's fast.
 
+> **Reviewers:** Organise mode is protected by an admin key. The key is included in the submission form rather than here, because this repository is public.
+
 ---
 
 ## Table of Contents
 
 1. [The Problem](#the-problem)
 2. [Features](#features)
-3. [Proof: No Overbooking Under Load](#proof-no-overbooking-under-load)
-4. [System Architecture](#system-architecture)
-5. [How Registration Works](#how-registration-works)
-6. [Design Decisions](#design-decisions)
-7. [Data Model](#data-model)
-8. [API Reference](#api-reference)
-9. [Project Directory Layout](#project-directory-layout)
-10. [Run It Locally](#run-it-locally)
-11. [Deployment](#deployment)
-12. [Known Limitations](#known-limitations)
-13. [Roadmap](#roadmap)
+3. [Using the App](#using-the-app)
+4. [Proof: No Overbooking Under Load](#proof-no-overbooking-under-load)
+5. [System Architecture](#system-architecture)
+6. [How Registration Works](#how-registration-works)
+7. [Design Decisions](#design-decisions)
+8. [Data Model](#data-model)
+9. [API Reference](#api-reference)
+10. [Project Directory Layout](#project-directory-layout)
+11. [Run It Locally](#run-it-locally)
+12. [Deployment](#deployment)
+13. [Known Limitations](#known-limitations)
+14. [Roadmap](#roadmap)
 
 ---
 
@@ -55,7 +58,26 @@ The task asks for duplicate-registration prevention and seat-limit management. E
 - **Duplicate-registration prevention** — one registration per email per event, case-insensitive (`A@x.com` and `a@x.com` are the same person)
 - **Seat-limit management** — registrations stop exactly at capacity, even under simultaneous requests
 - **Attendee list** — every registration for an event, in the order people signed up, updating live as seats fill
+- **Organiser access** — creating events and viewing attendee lists require an admin key, so attendee emails aren't public
 - **Clear feedback** — the frontend shows the backend's own error messages ("already registered", "event is full") instead of a generic failure
+
+---
+
+## Using the App
+
+The app has two modes, switched with the tabs at the top right.
+
+**Register** (open to everyone)
+1. Pick a workshop from the list. Each card shows how many seats are left.
+2. Enter your name and email in the details panel and register.
+3. Registering twice with the same email, or for a full event, shows a clear message instead.
+
+**Organise** (admin key required)
+1. Enter the admin key to unlock. It's checked by the server, not the browser.
+2. Create a workshop with the form at the top.
+3. Pick any event to see its attendee list, numbered in sign-up order.
+
+Refreshing the page locks Organise mode again; the key is never stored in the browser.
 
 ---
 
@@ -94,7 +116,7 @@ It checks two things, not one: that `seatsTaken` never exceeds capacity, **and**
             |   Hosted on Render                   |
             |                                      |
             |   middleware: cors(), express.json() |
-            |   5 routes under /api/events         |
+            |   requireAdmin on organiser routes   |
             +--------------------------------------+
                               |
                               |  Mongoose
@@ -151,8 +173,11 @@ A unique compound index on `(event, email)` makes MongoDB refuse a second regist
 **Failed seat reservations roll back the registration.**
 Registration is saved before the seat is reserved, so a duplicate is rejected before it can take a seat. If no seat is available, that registration is deleted, so nobody is left "registered" without a seat.
 
+**Organiser routes are protected by middleware.**
+A `requireAdmin` middleware checks the `x-admin-key` header on the create-event and attendee routes, and returns `401` if it's missing or wrong. It fails closed: if `ADMIN_KEY` isn't configured on the server, every organiser request is refused rather than allowed. The frontend verifies a key against `GET /api/admin/check` before unlocking Organise mode, and keeps it only in memory.
+
 **Status codes mean something.**
-`201` created · `400` invalid input or malformed ID · `404` event not found · `409` duplicate or full · `500` server failure. The frontend displays the backend's error message directly, so the server is the single place those messages are written.
+`201` created · `400` invalid input or malformed ID · `401` missing or wrong admin key · `404` event not found · `409` duplicate or full · `500` server failure. The frontend displays the backend's error message directly, so the server is the single place those messages are written.
 
 **Dates are converted to UTC in the browser.**
 The `datetime-local` picker returns a time with no timezone. The client converts it with `toISOString()` before sending, because the browser knows the user is in India and the server (in UTC on Render) does not. A 4 PM workshop is stored as 4 PM IST, not 4 PM UTC.
@@ -161,7 +186,7 @@ The `datetime-local` picker returns a time with no timezone. The client converts
 The app stores only the selected event's **ID** and looks it up from the freshly fetched list on every render. Storing a copy would leave the details panel showing stale seat counts after a registration.
 
 **Secrets live in environment variables.**
-`MONGO_URI` is read from `server/.env` locally and from Render's environment settings in production. `.env` is gitignored. The frontend's API address comes from `VITE_API_URL`, so the same code runs locally and in production.
+`MONGO_URI` and `ADMIN_KEY` are read from `server/.env` locally and from Render's environment settings in production. `.env` is gitignored. The frontend's API address comes from `VITE_API_URL`, so the same code runs locally and in production.
 
 ---
 
@@ -196,19 +221,23 @@ The app stores only the selected event's **ID** and looks it up from the freshly
 
 Base URL: `https://eventease-0pnk.onrender.com/api`
 
-| Method | Endpoint | Description | Success | Errors |
-|---|---|---|---|---|
-| `GET` | `/events` | List all events, soonest first | `200` | `500` |
-| `POST` | `/events` | Create an event | `201` | `400` validation failed |
-| `GET` | `/events/:id` | Get one event | `200` | `400` malformed ID · `404` not found |
-| `POST` | `/events/:id/register` | Register for an event | `201` | `400` · `404` · `409` duplicate · `409` full |
-| `GET` | `/events/:id/attendees` | List an event's registrations, in sign-up order | `200` | `400` malformed ID |
+| Method | Endpoint | Description | Auth | Success | Errors |
+|---|---|---|---|---|---|
+| `GET` | `/events` | List all events, soonest first | — | `200` | `500` |
+| `POST` | `/events` | Create an event | 🔒 admin key | `201` | `400` validation · `401` |
+| `GET` | `/events/:id` | Get one event | — | `200` | `400` malformed ID · `404` |
+| `POST` | `/events/:id/register` | Register for an event | — | `201` | `400` · `404` · `409` duplicate · `409` full |
+| `GET` | `/events/:id/attendees` | List registrations, in sign-up order | 🔒 admin key | `200` | `400` · `401` |
+| `GET` | `/admin/check` | Verify an admin key | 🔒 admin key | `200` | `401` |
+
+Protected routes expect the key in an `x-admin-key` header.
 
 ### Example: create an event
 
 ```http
 POST /api/events
 Content-Type: application/json
+x-admin-key: <your-admin-key>
 
 {
   "title": "Intro to React",
@@ -245,7 +274,7 @@ eventease/
 ├── README.md
 │
 ├── server/                         # Express API
-│   ├── index.js                    # App setup, middleware, all 5 routes, DB connection
+│   ├── index.js                    # App setup, middleware, routes, DB connection
 │   ├── models/
 │   │   ├── Event.js                # Event schema
 │   │   └── Registration.js         # Registration schema + unique (event, email) index
@@ -253,19 +282,19 @@ eventease/
 │   │   └── stressTest.js           # 50 simultaneous registrations → 10 seats
 │   ├── package.json
 │   ├── .gitignore                  # node_modules, .env
-│   └── .env                        # MONGO_URI (gitignored, never committed)
+│   └── .env                        # MONGO_URI, ADMIN_KEY (gitignored, never committed)
 │
 └── client/                         # React app (Vite)
     ├── index.html
     ├── package.json
     └── src/
         ├── main.jsx                # Entry point
-        ├── App.jsx                 # Event list, details panel, registration form
-        ├── CreateEventForm.jsx     # Create-event form
-        ├── AttendeeList.jsx        # Attendee list, refetches when seats change
+        ├── App.jsx                 # Modes, event list, details panel, registration, unlock
+        ├── CreateEventForm.jsx     # Create-event form (sends admin key)
+        ├── AttendeeList.jsx        # Attendee list (sends admin key), refetches when seats change
         ├── api.js                  # API base URL (VITE_API_URL or localhost)
-        ├── App.css
-        └── index.css
+        ├── App.css                 # Layout and components
+        └── index.css               # Colour palette and base styles
 ```
 
 ---
@@ -286,6 +315,7 @@ Create `server/.env`:
 
 ```
 MONGO_URI=your_mongodb_connection_string
+ADMIN_KEY=any_long_random_string
 ```
 
 Start it:
@@ -306,7 +336,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. The client talks to `http://localhost:3000/api` by default; set `VITE_API_URL` in `client/.env` to point it anywhere else.
+Open `http://localhost:5173`. The client talks to `http://localhost:3000/api` by default; set `VITE_API_URL` in `client/.env` to point it anywhere else. Use the `ADMIN_KEY` from your `.env` to unlock Organise mode.
 
 ### 3. Stress test
 
@@ -317,7 +347,7 @@ cd eventease/server
 node scripts/stressTest.js
 ```
 
-Each run creates a new "Stress Test" event in the database.
+The script reads `ADMIN_KEY` from `.env` to create its test event. Each run creates a new "Stress Test" event in the database.
 
 ---
 
@@ -331,7 +361,7 @@ Both halves deploy automatically on every push to `main`.
 | **Root directory** | `server` | `client` |
 | **Build command** | `npm install` | `npm run build` (Vite preset) |
 | **Start command** | `npm start` | — (static files) |
-| **Environment** | `MONGO_URI` | `VITE_API_URL=https://eventease-0pnk.onrender.com/api` |
+| **Environment** | `MONGO_URI`, `ADMIN_KEY` | `VITE_API_URL=https://eventease-0pnk.onrender.com/api` |
 | **Port** | `process.env.PORT`, assigned by Render | — |
 
 `VITE_` variables are baked into the frontend at build time, so changing `VITE_API_URL` requires a redeploy.
@@ -342,7 +372,7 @@ Both halves deploy automatically on every push to `main`.
 
 Better stated here than found later.
 
-- **No authentication yet.** Anyone can create events and view attendee lists, which means attendee emails are publicly readable. Protecting these routes is the first item on the roadmap.
+- **One shared admin key, not organiser accounts.** Anyone with the key has full organiser access, and there's no way to tell organisers apart or revoke one person's access without changing the key for everyone.
 - **Registration and seat reservation are two operations, not one transaction.** Each is atomic on its own and the stress test passes, but if the server crashed in the instant between saving a registration and rolling it back, an orphaned registration could remain. A MongoDB transaction would close this completely.
 - **No editing or cancelling.** Events can't be edited or deleted, and participants can't cancel a registration (which would also need to free a seat).
 - **Cold starts.** The free Render instance sleeps when idle, so the first request after a quiet period is slow.
@@ -353,7 +383,7 @@ Better stated here than found later.
 
 | Next | What it involves |
 |---|---|
-| **Protect admin routes** | An admin key checked by middleware on create-event and attendee routes, so attendee emails are no longer public. |
+| **Organiser accounts** | Individual logins (hashed passwords + JWT) instead of one shared key, so access can be granted and revoked per person. |
 | **Cancel registration** | Delete the registration and atomically decrement `seatsTaken`, the mirror image of reserving. |
 | **Waitlist** | When an event is full, queue the registration instead of rejecting it, and promote the first person in line when someone cancels. |
 | **Transactions** | Wrap "save registration" and "reserve seat" in one MongoDB transaction so they succeed or fail together. |
