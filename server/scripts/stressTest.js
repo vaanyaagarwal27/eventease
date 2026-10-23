@@ -1,9 +1,10 @@
+require('dotenv').config();
 const BASE = 'http://localhost:3000/api';
 
 async function main() {
   const res = await fetch(`${BASE}/events`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': process.env.ADMIN_KEY },
     body: JSON.stringify({
       title: 'Stress Test',
       venue: 'Test Hall',
@@ -12,6 +13,11 @@ async function main() {
     }),
   });
   const event = await res.json();
+
+  if (!res.ok) {
+    console.log('Could not create test event:', event.error);
+    return;
+  }
 
   const requests = [];
   for (let i = 1; i <= 50; i++) {
@@ -29,7 +35,11 @@ async function main() {
   const rejected = responses.filter((r) => r.status === 409).length;
 
   const final = await (await fetch(`${BASE}/events/${event._id}`)).json();
-  const attendees = await (await fetch(`${BASE}/events/${event._id}/attendees`)).json();
+  const attendees = await (
+    await fetch(`${BASE}/events/${event._id}/attendees`, {
+      headers: { 'x-admin-key': process.env.ADMIN_KEY },
+    })
+  ).json();
 
   console.log(`Capacity:            ${event.capacity}`);
   console.log(`Requests sent:       50 (simultaneously)`);

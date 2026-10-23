@@ -8,6 +8,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+function requireAdmin(req, res, next) {
+    const key = req.get('x-admin-key');
+    if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
+        return res.status(401).json({ error: 'Admin key required' });
+    }
+    next();
+}
+
 app.get('/', (req, res) => {
     res.send('EventEase server is running');
 
@@ -17,7 +25,7 @@ app.get('/hello', (req, res) => {
     res.json({ message: 'hi' });
 });
 
-app.post('/api/events', async (req, res) => {
+app.post('/api/events', requireAdmin, async (req, res) => {
     try {
         const event = await Event.create(req.body);
         res.status(201).json(event);
@@ -80,13 +88,17 @@ app.post('/api/events/:id/register', async (req, res) => {
     }
 });
 
-app.get('/api/events/:id/attendees', async (req, res) => {
+app.get('/api/events/:id/attendees', requireAdmin, async (req, res) => {
     try {
         const attendees = await Registration.find({ event: req.params.id }).sort({ createdAt: 1 });
         res.json(attendees);
     } catch (err) {
         res.status(400).json({ error: 'Invalid event id' });
     }
+});
+
+app.get('/api/admin/check', requireAdmin, (req, res) => {
+  res.json({ ok: true });
 });
 
 mongoose.connect(process.env.MONGO_URI)
