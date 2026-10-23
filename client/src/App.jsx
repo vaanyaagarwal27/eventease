@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-
 import { API } from './api';
 import CreateEventForm from './CreateEventForm';
+import AttendeeList from './AttendeeList';
 
 function App() {
   const [events, setEvents] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+
+  const selected = events.find((event) => event._id === selectedId);
 
   function loadEvents() {
     fetch(`${API}/events`)
@@ -42,38 +44,50 @@ function App() {
   return (
     <div>
       <h1>EventEase</h1>
-<CreateEventForm onCreated={loadEvents} />
+
+      <CreateEventForm onCreated={loadEvents} />
+
       <ul>
         {events.map((event) => (
           <li key={event._id}>
             {event.title} · {event.venue} · {new Date(event.date).toLocaleString()} (
             {event.seatsTaken}/{event.capacity} seats)
-           <button
-  disabled={event.seatsTaken >= event.capacity}
-  onClick={() => {
-    setSelected(event);
-    setMessage('');
-  }}
->
-  {event.seatsTaken >= event.capacity ? 'Full' : 'Register'}
-</button>
+            <button
+              onClick={() => {
+                setSelectedId(event._id);
+                setMessage('');
+              }}
+            >
+              View
+            </button>
           </li>
         ))}
       </ul>
 
       {selected && (
-        <form onSubmit={handleRegister}>
-          <h2>Register for {selected.title}</h2>
-          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button type="submit">Register</button>
+        <div>
+          <h2>{selected.title}</h2>
+          {selected.description && <p>{selected.description}</p>}
+
+          {selected.seatsTaken >= selected.capacity ? (
+            <p>This event is full.</p>
+          ) : (
+            <form onSubmit={handleRegister}>
+              <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <button type="submit">Register</button>
+            </form>
+          )}
+
           {message && <p>{message}</p>}
-        </form>
+
+          <AttendeeList eventId={selected._id} seatsTaken={selected.seatsTaken} />
+        </div>
       )}
     </div>
   );
