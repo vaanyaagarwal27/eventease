@@ -78,6 +78,14 @@ app.post('/api/events/:id/register', async (req,res) =>{
     }
 });
 
+app.get('/api/events/:id/attendees', async (req, res) => {
+  try {
+    const attendees = await Registration.find({ event: req.params.id }).sort({ createdAt: 1});
+    res.json(attendees);
+  } catch (err) {
+    res.status(400).json({ error: 'Invalid event id' });
+  }
+});
 
 mongoose.connect(process.env.MONGO_URI)
 .then(() => {
