@@ -2,9 +2,22 @@ import { useEffect, useState } from 'react';
 import { API } from './api';
 import CreateEventForm from './CreateEventForm';
 import AttendeeList from './AttendeeList';
+import './App.css';
+
+function formatDate(date) {
+  return new Date(date).toLocaleString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 function App() {
+  const [mode, setMode] = useState('register');
   const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -15,12 +28,26 @@ function App() {
   function loadEvents() {
     fetch(`${API}/events`)
       .then((res) => res.json())
-      .then((data) => setEvents(data));
+      .then((data) => {
+        setEvents(data);
+        setLoading(false);
+      });
   }
 
   useEffect(() => {
     loadEvents();
   }, []);
+
+  function switchMode(newMode) {
+    setMode(newMode);
+    setSelectedId(null);
+    setMessage('');
+  }
+
+  function openEvent(id) {
+    setSelectedId(id);
+    setMessage('');
+  }
 
   async function handleRegister(e) {
     e.preventDefault();
@@ -42,53 +69,98 @@ function App() {
   }
 
   return (
-    <div>
-      <h1>EventEase</h1>
+    <div className="app">
+      <header className="header">
+        <h1>EventEase</h1>
+        <nav className="tabs">
+          <button
+            className={mode === 'register' ? 'tab active' : 'tab'}
+            onClick={() => switchMode('register')}
+          >
+            Register
+          </button>
+          <button
+            className={mode === 'organise' ? 'tab active' : 'tab'}
+            onClick={() => switchMode('organise')}
+          >
+            Organise
+          </button>
+        </nav>
+      </header>
 
-      <CreateEventForm onCreated={loadEvents} />
+      {mode === 'organise' && <CreateEventForm onCreated={loadEvents} />}
 
-      <ul>
-        {events.map((event) => (
-          <li key={event._id}>
-            {event.title} · {event.venue} · {new Date(event.date).toLocaleString()} (
-            {event.seatsTaken}/{event.capacity} seats)
-            <button
-              onClick={() => {
-                setSelectedId(event._id);
-                setMessage('');
-              }}
-            >
-              View
-            </button>
-          </li>
-        ))}
-      </ul>
+      <main className="layout">
+        <section className="event-list">
+          <h2>{mode === 'register' ? 'Upcoming workshops' : 'All events'}</h2>
 
-      {selected && (
-        <div>
-          <h2>{selected.title}</h2>
-          {selected.description && <p>{selected.description}</p>}
-
-          {selected.seatsTaken >= selected.capacity ? (
-            <p>This event is full.</p>
-          ) : (
-            <form onSubmit={handleRegister}>
-              <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <button type="submit">Register</button>
-            </form>
+          {loading && (
+            <p className="muted">Waking up the server… this can take up to a minute.</p>
           )}
 
-          {message && <p>{message}</p>}
+          {events.map((event) => {
+            const full = event.seatsTaken >= event.capacity;
+            return (
+              <button
+                key={event._id}
+                className={event._id === selectedId ? 'event-card selected' : 'event-card'}
+                onClick={() => openEvent(event._id)}
+              >
+                <span className="event-title">{event.title}</span>
+                <span className="event-meta">
+                  {event.venue} · {formatDate(event.date)}
+                </span>
+                <span className={full ? 'seats full' : 'seats'}>
+                  {full ? 'Full' : `${event.capacity - event.seatsTaken} seats left`}
+                </span>
+              </button>
+            );
+          })}
+        </section>
 
-          <AttendeeList eventId={selected._id} seatsTaken={selected.seatsTaken} />
-        </div>
-      )}
+        {selected ? (
+          <section className="panel">
+            <h2>{selected.title}</h2>
+            <p className="event-meta">
+              {selected.venue} · {formatDate(selected.date)}
+            </p>
+            {selected.description && <p>{selected.description}</p>}
+            <p className="seat-count">
+              {selected.seatsTaken} / {selected.capacity} seats taken
+            </p>
+
+            {mode === 'register' &&
+              (selected.seatsTaken >= selected.capacity ? (
+                <p className="notice">This event is full.</p>
+              ) : (
+                <form className="form" onSubmit={handleRegister}>
+                  <input
+                    placeholder="Your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <button type="submit">Register</button>
+                </form>
+              ))}
+
+            {message && <p className="notice">{message}</p>}
+
+            {mode === 'organise' && (
+              <AttendeeList eventId={selected._id} seatsTaken={selected.seatsTaken} />
+            )}
+          </section>
+        ) : (
+          <section className="panel empty">
+            <p>Pick an event to see its details.</p>
+          </section>
+        )}
+      </main>
     </div>
   );
 }
