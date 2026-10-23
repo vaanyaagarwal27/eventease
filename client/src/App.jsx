@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { API } from './api';
+import CreateEventForm from './CreateEventForm';
 
 function App() {
   const [events, setEvents] = useState([]);
@@ -41,7 +42,7 @@ function App() {
   return (
     <div>
       <h1>EventEase</h1>
-
+<CreateEventForm onCreated={loadEvents} />
       <ul>
         {events.map((event) => (
           <li key={event._id}>
