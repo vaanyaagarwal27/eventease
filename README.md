@@ -1,4 +1,4 @@
-# EventEase — Workshop Registration That Never Overbooks
+# EventEase : Workshop Registration That Never Overbooks
 
 [![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=black)](client/)
 [![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)](server/)
